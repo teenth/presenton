@@ -1,3 +1,10 @@
+x-presenton-traefik-labels: &presenton-traefik-labels
+  - "traefik.enable=true"
+  - "traefik.http.routers.${PRESENTON_TRAEFIK_ROUTER_NAME:-presenton}.rule=Host(`${PRESENTON_TRAEFIK_HOST:-presenton.local}`)"
+  - "traefik.http.routers.${PRESENTON_TRAEFIK_ROUTER_NAME:-presenton}.service=${PRESENTON_TRAEFIK_SERVICE_NAME:-presenton}"
+  - "traefik.http.services.${PRESENTON_TRAEFIK_SERVICE_NAME:-presenton}.loadbalancer.server.port=80"
+  - "traefik.http.services.${PRESENTON_TRAEFIK_SERVICE_NAME:-presenton}.loadbalancer.passHostHeader=true"
+
 services:
   production:
     # image: ghcr.io/presenton/presenton:latest
@@ -9,6 +16,7 @@ services:
       - "3000:80"
       # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
       - "1455:1455"
+    labels: *presenton-traefik-labels
     volumes:
       - ./app_data:/app_data
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
@@ -113,6 +121,7 @@ services:
       - "3000:80"
       # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
       - "1455:1455"
+    labels: *presenton-traefik-labels
     volumes:
       - ./app_data:/app_data
     environment:
