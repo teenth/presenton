@@ -6,7 +6,7 @@ x-presenton-traefik-labels: &presenton-traefik-labels
   - "traefik.http.services.${PRESENTON_TRAEFIK_SERVICE_NAME:-presenton}.loadbalancer.passHostHeader=true"
 
 services:
-  production:
+  openai-production:
     # image: ghcr.io/presenton/presenton:latest
     build:
       context: .
@@ -24,8 +24,8 @@ services:
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
-      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
-      - LLM=${LLM}
+      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS:-false}
+      - LLM=${LLM:-custom}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -73,7 +73,12 @@ services:
       - LMSTUDIO_MODEL=${LMSTUDIO_MODEL}
       - CODEX_MODEL=${CODEX_MODEL}
       - DISABLE_IMAGE_GENERATION=${DISABLE_IMAGE_GENERATION}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai_compatible}
+      - OPENAI_COMPAT_IMAGE_BASE_URL=${OPENAI_COMPAT_IMAGE_BASE_URL}
+      - OPENAI_COMPAT_IMAGE_API_KEY=${OPENAI_COMPAT_IMAGE_API_KEY}
+      - OPENAI_COMPAT_IMAGE_MODEL=${OPENAI_COMPAT_IMAGE_MODEL}
+      - OPENAI_COMPAT_IMAGE_GENERATE_PATH=${OPENAI_COMPAT_IMAGE_GENERATE_PATH:-/images/generations}
+      - OPENAI_COMPAT_IMAGE_RESULT_PATH=${OPENAI_COMPAT_IMAGE_RESULT_PATH:-}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - PIXABAY_API_KEY=${PIXABAY_API_KEY}
       - DALL_E_3_QUALITY=${DALL_E_3_QUALITY}
@@ -85,9 +90,9 @@ services:
       - DISABLE_ANONYMOUS_TRACKING=${DISABLE_ANONYMOUS_TRACKING}
       - COMFYUI_URL=${COMFYUI_URL}
       - COMFYUI_WORKFLOW=${COMFYUI_WORKFLOW}
-      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-${OLLAMA_MODEL:-llama3.1:latest}}
-      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-ollama}
-      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-gpt-4.1}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-${CUSTOM_LLM_API_KEY}}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${CUSTOM_LLM_URL}}
       - MEM0_ENABLED=${MEM0_ENABLED:-true}
       - MEM0_DIR=${MEM0_DIR:-/app_data/mem0}
       - MEM0_EMBEDDER_PROVIDER=${MEM0_EMBEDDER_PROVIDER:-fastembed}
@@ -104,11 +109,13 @@ services:
       - AUTH_OVERRIDE_FROM_ENV=${AUTH_OVERRIDE_FROM_ENV:-}
       - RESET_AUTH=${RESET_AUTH:-}
 
-  production-gpu:
+  openai-production-gpu:
     # image: ghcr.io/presenton/presenton:latest
     build:
       context: .
       dockerfile: Dockerfile
+    profiles:
+      - gpu
     deploy:
       resources:
         reservations:
@@ -127,8 +134,8 @@ services:
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
-      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
-      - LLM=${LLM}
+      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS:-false}
+      - LLM=${LLM:-custom}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -176,7 +183,12 @@ services:
       - LMSTUDIO_MODEL=${LMSTUDIO_MODEL}
       - CODEX_MODEL=${CODEX_MODEL}
       - DISABLE_IMAGE_GENERATION=${DISABLE_IMAGE_GENERATION}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai_compatible}
+      - OPENAI_COMPAT_IMAGE_BASE_URL=${OPENAI_COMPAT_IMAGE_BASE_URL}
+      - OPENAI_COMPAT_IMAGE_API_KEY=${OPENAI_COMPAT_IMAGE_API_KEY}
+      - OPENAI_COMPAT_IMAGE_MODEL=${OPENAI_COMPAT_IMAGE_MODEL}
+      - OPENAI_COMPAT_IMAGE_GENERATE_PATH=${OPENAI_COMPAT_IMAGE_GENERATE_PATH:-/images/generations}
+      - OPENAI_COMPAT_IMAGE_RESULT_PATH=${OPENAI_COMPAT_IMAGE_RESULT_PATH:-}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - PIXABAY_API_KEY=${PIXABAY_API_KEY}
       - DALL_E_3_QUALITY=${DALL_E_3_QUALITY}
@@ -188,9 +200,9 @@ services:
       - DISABLE_ANONYMOUS_TRACKING=${DISABLE_ANONYMOUS_TRACKING}
       - COMFYUI_URL=${COMFYUI_URL}
       - COMFYUI_WORKFLOW=${COMFYUI_WORKFLOW}
-      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-${OLLAMA_MODEL:-llama3.1:latest}}
-      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-ollama}
-      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-gpt-4.1}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-${CUSTOM_LLM_API_KEY}}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${CUSTOM_LLM_URL}}
       - MEM0_ENABLED=${MEM0_ENABLED:-true}
       - MEM0_DIR=${MEM0_DIR:-/app_data/mem0}
       - MEM0_EMBEDDER_PROVIDER=${MEM0_EMBEDDER_PROVIDER:-fastembed}
@@ -207,7 +219,9 @@ services:
       - AUTH_OVERRIDE_FROM_ENV=${AUTH_OVERRIDE_FROM_ENV:-}
       - RESET_AUTH=${RESET_AUTH:-}
 
-  development:
+  openai-development:
+    profiles:
+      - development
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -226,8 +240,8 @@ services:
       # Ollama is not baked into the image; set START_OLLAMA=true for runtime install, or use OLLAMA_URL.
       - START_OLLAMA=${START_OLLAMA:-false}
       - MIGRATE_DATABASE_ON_STARTUP=true
-      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
-      - LLM=${LLM}
+      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS:-false}
+      - LLM=${LLM:-custom}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -274,7 +288,12 @@ services:
       - LMSTUDIO_MODEL=${LMSTUDIO_MODEL}
       - CODEX_MODEL=${CODEX_MODEL}
       - DISABLE_IMAGE_GENERATION=${DISABLE_IMAGE_GENERATION}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai_compatible}
+      - OPENAI_COMPAT_IMAGE_BASE_URL=${OPENAI_COMPAT_IMAGE_BASE_URL}
+      - OPENAI_COMPAT_IMAGE_API_KEY=${OPENAI_COMPAT_IMAGE_API_KEY}
+      - OPENAI_COMPAT_IMAGE_MODEL=${OPENAI_COMPAT_IMAGE_MODEL}
+      - OPENAI_COMPAT_IMAGE_GENERATE_PATH=${OPENAI_COMPAT_IMAGE_GENERATE_PATH:-/images/generations}
+      - OPENAI_COMPAT_IMAGE_RESULT_PATH=${OPENAI_COMPAT_IMAGE_RESULT_PATH:-}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - PIXABAY_API_KEY=${PIXABAY_API_KEY}
       - DALL_E_3_QUALITY=${DALL_E_3_QUALITY}
@@ -286,9 +305,9 @@ services:
       - DISABLE_ANONYMOUS_TRACKING=${DISABLE_ANONYMOUS_TRACKING}
       - COMFYUI_URL=${COMFYUI_URL}
       - COMFYUI_WORKFLOW=${COMFYUI_WORKFLOW}
-      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-${OLLAMA_MODEL:-llama3.1:latest}}
-      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-ollama}
-      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-gpt-4.1}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-${CUSTOM_LLM_API_KEY}}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${CUSTOM_LLM_URL}}
       - MEM0_ENABLED=${MEM0_ENABLED:-true}
       - MEM0_DIR=${MEM0_DIR:-/app_data/mem0}
       - MEM0_EMBEDDER_PROVIDER=${MEM0_EMBEDDER_PROVIDER:-fastembed}
@@ -305,7 +324,10 @@ services:
       - AUTH_OVERRIDE_FROM_ENV=${AUTH_OVERRIDE_FROM_ENV:-}
       - RESET_AUTH=${RESET_AUTH:-}
 
-  development-gpu:
+  openai-development-gpu:
+    profiles:
+      - development
+      - gpu
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -329,8 +351,8 @@ services:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - START_OLLAMA=${START_OLLAMA:-false}
       - MIGRATE_DATABASE_ON_STARTUP=true
-      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
-      - LLM=${LLM}
+      - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS:-false}
+      - LLM=${LLM:-custom}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -377,7 +399,12 @@ services:
       - LMSTUDIO_MODEL=${LMSTUDIO_MODEL}
       - CODEX_MODEL=${CODEX_MODEL}
       - DISABLE_IMAGE_GENERATION=${DISABLE_IMAGE_GENERATION}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai_compatible}
+      - OPENAI_COMPAT_IMAGE_BASE_URL=${OPENAI_COMPAT_IMAGE_BASE_URL}
+      - OPENAI_COMPAT_IMAGE_API_KEY=${OPENAI_COMPAT_IMAGE_API_KEY}
+      - OPENAI_COMPAT_IMAGE_MODEL=${OPENAI_COMPAT_IMAGE_MODEL}
+      - OPENAI_COMPAT_IMAGE_GENERATE_PATH=${OPENAI_COMPAT_IMAGE_GENERATE_PATH:-/images/generations}
+      - OPENAI_COMPAT_IMAGE_RESULT_PATH=${OPENAI_COMPAT_IMAGE_RESULT_PATH:-}
       - PEXELS_API_KEY=${PEXELS_API_KEY}
       - PIXABAY_API_KEY=${PIXABAY_API_KEY}
       - DALL_E_3_QUALITY=${DALL_E_3_QUALITY}
@@ -389,9 +416,9 @@ services:
       - DISABLE_ANONYMOUS_TRACKING=${DISABLE_ANONYMOUS_TRACKING}
       - COMFYUI_URL=${COMFYUI_URL}
       - COMFYUI_WORKFLOW=${COMFYUI_WORKFLOW}
-      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-${OLLAMA_MODEL:-llama3.1:latest}}
-      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-ollama}
-      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL:-gpt-4.1}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY:-${CUSTOM_LLM_API_KEY}}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL:-${CUSTOM_LLM_URL}}
       - MEM0_ENABLED=${MEM0_ENABLED:-true}
       - MEM0_DIR=${MEM0_DIR:-/app_data/mem0}
       - MEM0_EMBEDDER_PROVIDER=${MEM0_EMBEDDER_PROVIDER:-fastembed}

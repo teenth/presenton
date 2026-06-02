@@ -111,7 +111,7 @@ export const IMAGE_PROVIDERS: Record<string, ImageProviderOption> = {
     value: "openai_compatible",
     label: "Custom",
     description:
-      "OpenAI-compatible /v1/images endpoint (LiteLLM, Azure, vLLM, etc.)",
+      "OpenAI-compatible image endpoint (LiteLLM, Azure, vLLM, etc.)",
     icon: "/providers/custom.svg",
     requiresApiKey: false,
     apiKeyField: "OPENAI_COMPAT_IMAGE_BASE_URL",

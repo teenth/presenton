@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import secrets
+from urllib.parse import urlparse
 import aiohttp
 from fastapi import HTTPException
 from google import genai
@@ -19,6 +20,8 @@ from utils.get_env import (
     get_openai_compat_image_base_url_env,
     get_openai_compat_image_api_key_env,
     get_openai_compat_image_model_env,
+    get_openai_compat_image_generate_path_env,
+    get_openai_compat_image_result_path_env,
 )
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
@@ -820,31 +823,452 @@ class ImageGenerationService:
                     else:
                         raise Exception(f"Failed to download image: {response.status}")
 
+    def _build_openai_compatible_image_endpoint(
+        self, base_url: str, custom_path: str | None
+    ) -> str:
+        base_url = base_url.strip().rstrip("/")
+
+        if custom_path:
+            custom_path = custom_path.strip()
+            if custom_path.startswith("http://") or custom_path.startswith("https://"):
+                return custom_path
+            return f"{base_url}/{custom_path.lstrip('/')}"
+
+        parsed = urlparse(base_url)
+        path = (parsed.path or "").rstrip("/")
+        if path.endswith("/api/generate") or path.endswith("/generate"):
+            return base_url
+        return f"{base_url}/images/generations"
+
+    async def _download_openai_compatible_image(self, image_url: str, api_key: str):
+        from aiohttp import ClientTimeout
+
+        if image_url.startswith("/"):
+            raise ValueError("Relative image URL is not supported in direct downloader")
+
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            dl_resp = await session.get(
+                image_url,
+                headers=headers,
+                timeout=ClientTimeout(total=120),
+            )
+            if dl_resp.status != 200:
+                raise Exception(
+                    f"Failed to download image from OpenAI-compatible provider: {dl_resp.status}"
+                )
+            return await dl_resp.read()
+
+    def _extract_openai_compatible_image_items(
+        self, payload: object
+    ) -> list[dict]:
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if not isinstance(payload, dict):
+            return []
+
+        image_items = payload.get("data")
+        if isinstance(image_items, list):
+            return [item for item in image_items if isinstance(item, dict)]
+
+        image_items = payload.get("images")
+        if isinstance(image_items, list):
+            return [item for item in image_items if isinstance(item, dict)]
+
+        image_items = payload.get("output")
+        if isinstance(image_items, list):
+            return [item for item in image_items if isinstance(item, dict)]
+
+        nested_result = payload.get("result")
+        if isinstance(nested_result, dict):
+            image_items = nested_result.get("data")
+            if isinstance(image_items, list):
+                return [item for item in image_items if isinstance(item, dict)]
+            if isinstance(nested_result.get("b64_json"), str):
+                return [nested_result]
+            if isinstance(nested_result.get("url"), str):
+                return [nested_result]
+        elif isinstance(nested_result, list):
+            return [item for item in nested_result if isinstance(item, dict)]
+
+        if isinstance(payload.get("b64_json"), str) or isinstance(
+            payload.get("url"), str
+        ):
+            return [payload]
+
+        return []
+
+    def _get_openai_compatible_image_status(self, payload: object) -> str | None:
+        if not isinstance(payload, dict):
+            return None
+
+        status = payload.get("status") or payload.get("state")
+        if not status:
+            return None
+        return str(status).lower().strip()
+
+    def _extract_openai_compatible_task_ref(
+        self, payload: object
+    ) -> tuple[str, str] | None:
+        if not isinstance(payload, dict):
+            return None
+
+        candidate_keys = (
+            "task_id",
+            "taskId",
+            "request_id",
+            "requestId",
+            "request",
+            "id",
+            "job_id",
+            "jobId",
+            "result_id",
+            "resultId",
+        )
+        for key in candidate_keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return key, value.strip()
+            if isinstance(value, (int, float)) and str(value):
+                return key, str(value)
+
+            if isinstance(value, dict):
+                nested_value = value.get("id")
+                if isinstance(nested_value, str) and nested_value.strip():
+                    return key, nested_value.strip()
+                if isinstance(nested_value, (int, float)) and str(nested_value):
+                    return key, str(nested_value)
+
+        nested_result = payload.get("result")
+        if isinstance(nested_result, dict):
+            for key in candidate_keys:
+                value = nested_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return key, value.strip()
+                if isinstance(value, (int, float)) and str(value):
+                    return key, str(value)
+
+        return None
+
+    def _build_task_lookup_variants(self, task_ref: tuple[str, str]) -> list[dict[str, str]]:
+        key, value = task_ref
+        candidate_keys = [
+            key,
+            "id",
+            "task_id",
+            "taskId",
+            "request_id",
+            "requestId",
+            "request",
+            "job_id",
+            "jobId",
+            "result_id",
+            "resultId",
+        ]
+        payloads: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for candidate_key in candidate_keys:
+            if candidate_key in seen:
+                continue
+            seen.add(candidate_key)
+            payloads.append({candidate_key: value})
+        return payloads
+
+    async def _query_openai_compatible_image_result_once(
+        self,
+        session: aiohttp.ClientSession,
+        result_endpoint: str,
+        api_key: str,
+        payload: dict[str, str],
+        method: str,
+    ) -> object | None:
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        timeout = aiohttp.ClientTimeout(total=120)
+
+        if method == "get":
+            async with session.get(
+                result_endpoint,
+                params=payload,
+                headers=headers,
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.json()
+
+        if method == "post":
+            async with session.post(
+                result_endpoint,
+                json=payload,
+                headers={**headers, "Content-Type": "application/json"},
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.json()
+
+        return None
+
+    async def _wait_for_openai_compatible_image_result(
+        self,
+        session: aiohttp.ClientSession,
+        result_endpoint: str,
+        api_key: str,
+        base_url: str,
+        output_directory: str,
+        task_ref: tuple[str, str],
+        max_attempts: int = 60,
+        poll_interval_seconds: float = 2.0,
+    ) -> str:
+        lookup_payloads = self._build_task_lookup_variants(task_ref)
+        completed_status = {"succeeded", "success", "completed", "finished", "done", "ready"}
+        in_progress_status = {
+            "queued",
+            "in_progress",
+            "processing",
+            "running",
+            "pending",
+            "submitted",
+        }
+        failed_status = {"error", "failed", "failure", "cancelled", "canceled"}
+
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                await asyncio.sleep(poll_interval_seconds)
+
+            body = None
+            for payload in lookup_payloads:
+                body = await self._query_openai_compatible_image_result_once(
+                    session=session,
+                    result_endpoint=result_endpoint,
+                    api_key=api_key,
+                    payload=payload,
+                    method="get",
+                )
+                if body is not None:
+                    break
+
+                body = await self._query_openai_compatible_image_result_once(
+                    session=session,
+                    result_endpoint=result_endpoint,
+                    api_key=api_key,
+                    payload=payload,
+                    method="post",
+                )
+                if body is not None:
+                    break
+
+            if body is None:
+                if attempt == max_attempts - 1:
+                    raise Exception(
+                        "OpenAI-compatible image result endpoint returned no response."
+                    )
+                continue
+
+            image_items = self._extract_openai_compatible_image_items(body)
+            if image_items:
+                return await self._write_openai_compatible_image_payload(
+                    body=body,
+                    output_directory=output_directory,
+                    base_url=base_url,
+                    api_key=api_key,
+                )
+
+            status = self._get_openai_compatible_image_status(body)
+            if not status:
+                if attempt == max_attempts - 1:
+                    raise Exception(
+                        f"OpenAI-compatible image result endpoint returned unsupported payload: {json.dumps(body)}"
+                    )
+                continue
+
+            if status in completed_status:
+                raise Exception(
+                    f"OpenAI-compatible image result endpoint returned status={status} without image data."
+                )
+
+            if status in failed_status:
+                error_detail = ""
+                if isinstance(body, dict):
+                    err = body.get("error") or body.get("message") or body.get("detail")
+                    if err:
+                        error_detail = f": {err}"
+                raise Exception(
+                    f"OpenAI-compatible image generation failed with status={status}{error_detail}"
+                )
+
+            if status in in_progress_status:
+                continue
+
+        raise Exception("OpenAI-compatible image generation timed out while waiting for result.")
+
+    async def _write_openai_compatible_image_payload(
+        self,
+        body: object,
+        output_directory: str,
+        base_url: str,
+        api_key: str,
+    ) -> str:
+        items = self._extract_openai_compatible_image_items(body)
+        if not items:
+            raise Exception(
+                f"OpenAI-compatible provider returned unsupported image payload: {json.dumps(body)}"
+            )
+
+        first = items[0]
+        if not isinstance(first, dict):
+            raise Exception("OpenAI-compatible provider returned unsupported image payload")
+
+        image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+
+        b64_json = first.get("b64_json")
+        if b64_json:
+            with open(image_path, "wb") as f:
+                f.write(base64.b64decode(b64_json))
+            return image_path
+
+        image_url = first.get("url")
+        if isinstance(first.get("image_url"), str):
+            image_url = first.get("image_url")
+        if isinstance(first.get("image"), str):
+            image_url = first.get("image")
+        if not image_url or not isinstance(image_url, str):
+            raise Exception("OpenAI-compatible provider returned no image data")
+
+        parsed = urlparse(base_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        if image_url.startswith("/"):
+            image_url = f"{origin}{image_url}"
+
+        image_bytes = await self._download_openai_compatible_image(image_url, api_key)
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+        return image_path
+
+    async def _generate_image_openai_compatible_from_endpoint(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        prompt: str,
+        output_directory: str,
+        endpoint: str,
+        result_endpoint: str | None = None,
+    ) -> str:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+        }
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            resp = await session.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=300),
+            )
+            if resp.status != 200:
+                error_text = await resp.text()
+                raise Exception(
+                    f"OpenAI-compatible image generation returned {resp.status}: {error_text}"
+                )
+
+            body = await resp.json()
+
+        image_items = self._extract_openai_compatible_image_items(body)
+        if image_items:
+            return await self._write_openai_compatible_image_payload(
+                body=body,
+                output_directory=output_directory,
+                base_url=base_url,
+                api_key=api_key,
+            )
+
+        task_ref = self._extract_openai_compatible_task_ref(body)
+        if task_ref and result_endpoint:
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                return await self._wait_for_openai_compatible_image_result(
+                    session=session,
+                    result_endpoint=result_endpoint,
+                    api_key=api_key,
+                    base_url=base_url,
+                    output_directory=output_directory,
+                    task_ref=task_ref,
+                )
+
+        raise Exception(
+            f"OpenAI-compatible provider returned no image data and no result reference: {json.dumps(body)}"
+        )
+
     async def generate_image_openai_compatible(
         self, prompt: str, output_directory: str
     ) -> str:
         base_url = get_openai_compat_image_base_url_env()
-        api_key = get_openai_compat_image_api_key_env()
+        api_key = get_openai_compat_image_api_key_env() or ""
         model = get_openai_compat_image_model_env()
+        generate_path = get_openai_compat_image_generate_path_env()
+        result_path = get_openai_compat_image_result_path_env()
 
-        if not base_url or not api_key or not model:
+        if not base_url or not model:
+            raise ValueError(
+                "OPENAI_COMPAT_IMAGE_BASE_URL, OPENAI_COMPAT_IMAGE_API_KEY and OPENAI_COMPAT_IMAGE_MODEL must be set."
+            )
+        if not api_key:
             raise ValueError(
                 "OPENAI_COMPAT_IMAGE_BASE_URL, OPENAI_COMPAT_IMAGE_API_KEY and OPENAI_COMPAT_IMAGE_MODEL must be set."
             )
 
-        from urllib.parse import urlparse
-
-        parsed = urlparse(base_url)
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-
-        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-
-        response = await client.images.generate(
-            model=model,
-            prompt=prompt,
-            n=1,
-            size="1024x1024",
+        endpoint = self._build_openai_compatible_image_endpoint(base_url, generate_path)
+        result_endpoint = (
+            self._build_openai_compatible_image_endpoint(base_url, result_path)
+            if result_path
+            else None
         )
+        base_path = (urlparse(base_url).path or "").rstrip("/")
+
+        is_full_endpoint = bool(
+            generate_path
+            or base_path.endswith("/api/generate")
+            or base_path.endswith("/generate")
+            or base_path.endswith("/images/generations")
+        )
+
+        if is_full_endpoint:
+            return await self._generate_image_openai_compatible_from_endpoint(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
+                prompt=prompt,
+                output_directory=output_directory,
+                endpoint=endpoint,
+                result_endpoint=result_endpoint,
+            )
+
+        # OpenAI-compatible default path, keep SDK behavior for normal gateways.
+        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        try:
+            response = await client.images.generate(
+                model=model,
+                prompt=prompt,
+                n=1,
+                size="1024x1024",
+            )
+        except Exception as e:
+            return await self._generate_image_openai_compatible_from_endpoint(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
+                prompt=prompt,
+                output_directory=output_directory,
+                endpoint=endpoint,
+                result_endpoint=result_endpoint,
+            )
 
         item = response.data[0]
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
@@ -854,8 +1278,11 @@ class ImageGenerationService:
                 f.write(base64.b64decode(item.b64_json))
         elif item.url:
             image_url = item.url
+            parsed = urlparse(base_url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
             if image_url.startswith("/"):
                 image_url = origin + image_url
+
             headers = {"Authorization": f"Bearer {api_key}"}
             async with aiohttp.ClientSession(trust_env=True) as session:
                 dl_resp = await session.get(

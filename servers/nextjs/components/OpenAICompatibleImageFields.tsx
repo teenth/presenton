@@ -225,8 +225,7 @@ export default function OpenAICompatibleImageFields({
     <div className="w-full space-y-6">
       <p className="-mt-2 mb-2 flex items-center gap-2 text-sm text-gray-500">
         <span className="block h-1 w-1 rounded-full bg-gray-400" />
-        Use an endpoint that supports OpenAI-style{" "}
-        <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1/images/generations</code>. Include{" "}
+        Use an endpoint that supports OpenAI-style image generation. Include{" "}
         <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">/v1</code> in the URL.
       </p>
 
