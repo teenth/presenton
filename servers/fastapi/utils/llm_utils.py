@@ -15,7 +15,21 @@ from llmai.shared import (
     normalize_content_parts,
 )
 
+from enums.llm_provider import LLMProvider
 from utils.llm_config import get_extra_body
+from utils.get_env import (
+    get_azure_openai_base_url_env,
+    get_cerebras_base_url_env,
+    get_custom_llm_url_env,
+    get_fireworks_base_url_env,
+    get_litellm_base_url_env,
+    get_llm_provider_env,
+    get_lmstudio_base_url_env,
+    get_openrouter_base_url_env,
+    get_ollama_url_env,
+    get_vertex_base_url_env,
+    get_together_base_url_env,
+)
 from utils.schema_utils import get_schema_validation_errors
 
 
@@ -52,13 +66,55 @@ def _normalize_endpoint_url(base_url: Optional[str]) -> Optional[str]:
 
 
 def _infer_client_base_url(client: Any) -> Optional[str]:
-    base_url = getattr(client, "base_url", None)
-    if base_url is None:
-        base_url = getattr(client, "_base_url", None)
-    if base_url is None:
+    candidate_attrs = ("base_url", "_base_url", "api_base", "_api_base", "api_url")
+    for attr in candidate_attrs:
+        base_url = getattr(client, attr, None)
+        if isinstance(base_url, str) and base_url.strip():
+            return base_url
+
+    nested_client = getattr(client, "client", None)
+    if nested_client and nested_client is not client:
+        for attr in candidate_attrs:
+            nested_value = getattr(nested_client, attr, None)
+            if isinstance(nested_value, str) and nested_value.strip():
+                return nested_value
+
+    return None
+
+
+def _infer_base_url_from_provider() -> Optional[str]:
+    provider_name = (get_llm_provider_env() or "").strip().lower()
+    if not provider_name:
         return None
 
-    return str(base_url)
+    try:
+        provider = LLMProvider(provider_name)
+    except Exception:
+        return None
+
+    if provider == LLMProvider.CUSTOM:
+        return get_custom_llm_url_env()
+    if provider == LLMProvider.OPENROUTER:
+        return get_openrouter_base_url_env()
+    if provider == LLMProvider.FIREWORKS:
+        return get_fireworks_base_url_env()
+    if provider == LLMProvider.TOGETHER:
+        return get_together_base_url_env()
+    if provider == LLMProvider.CEREBRAS:
+        return get_cerebras_base_url_env()
+    if provider == LLMProvider.LITELLM:
+        return get_litellm_base_url_env()
+    if provider == LLMProvider.LMSTUDIO:
+        return get_lmstudio_base_url_env()
+    if provider == LLMProvider.VERTEX:
+        return get_vertex_base_url_env()
+    if provider == LLMProvider.AZURE:
+        return get_azure_openai_base_url_env()
+    if provider == LLMProvider.OLLAMA:
+        ollama_url = (get_ollama_url_env() or "").strip()
+        if ollama_url:
+            return f"{ollama_url.rstrip('/')}/v1"
+    return None
 
 
 def _describe_response_format(response_format: Any) -> Optional[dict[str, Any]]:
@@ -310,6 +366,11 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
     queue: asyncio.Queue[Any] = asyncio.Queue()
     sentinel = object()
     endpoint = _normalize_endpoint_url(_infer_client_base_url(client))
+    if endpoint is None:
+        try:
+            endpoint = _normalize_endpoint_url(_infer_base_url_from_provider())
+        except Exception:
+            endpoint = None
 
     def worker():
         if llm_debug_logs_enabled():
