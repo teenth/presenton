@@ -9,6 +9,10 @@ import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
 
+const CONFIG_FETCH_TIMEOUT_MS = 10000;
+const MODEL_CHECK_TIMEOUT_MS = 12000;
+const NAVIGATION_FALLBACK_TIMEOUT_MS = 10000;
+
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
 
@@ -20,17 +24,44 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
   // Fetch user config state
   useEffect(() => {
-    fetchUserConfigState();
+    void fetchUserConfigState().catch((error) => {
+      console.error('Failed to initialize configuration:', error);
+      setIsLoading(false);
+    });
   }, []);
 
   const setLoadingToFalseAfterNavigatingTo = (pathname: string) => {
+    const startedAt = Date.now();
     const interval = setInterval(() => {
-      if (window.location.pathname === pathname) {
+      if (
+        window.location.pathname === pathname ||
+        Date.now() - startedAt > NAVIGATION_FALLBACK_TIMEOUT_MS
+      ) {
         clearInterval(interval);
         setIsLoading(false);
       }
     }, 500);
   }
+
+  const fetchWithTimeout = async (
+    input: RequestInfo | URL,
+    init: RequestInit = {},
+    timeoutMs = CONFIG_FETCH_TIMEOUT_MS
+  ) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      return await fetch(input, {
+        ...init,
+        signal: init.signal ?? controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
 
   const fetchUserConfigState = async () => {
     if (route.startsWith("/pdf-maker")) {
@@ -45,7 +76,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       if (window.electron?.getCanChangeKeys) {
         canChangeKeys = await window.electron.getCanChangeKeys();
       } else {
-        const res = await fetch('/api/can-change-keys');
+        const res = await fetchWithTimeout('/api/can-change-keys');
         const data = await res.json();
         canChangeKeys = data.canChange ?? false;
       }
@@ -61,7 +92,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         if (window.electron?.getUserConfig) {
           llmConfig = await window.electron.getUserConfig();
         } else {
-          const res = await fetch('/api/user-config');
+          const res = await fetchWithTimeout('/api/user-config');
           llmConfig = await res.json();
         }
       } catch (e) {
@@ -84,16 +115,14 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         if (llmConfig.LLM === 'ollama' && llmConfig.OLLAMA_MODEL) {
           const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
           if (!isPulled) {
-            router.push('/');
-            setLoadingToFalseAfterNavigatingTo('/');
+            setIsLoading(false);
             return;
           }
         }
         if (llmConfig.LLM === 'custom') {
           const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig);
           if (!isAvailable) {
-            router.push('/');
-            setLoadingToFalseAfterNavigatingTo('/');
+            setIsLoading(false);
             return;
           }
         }
@@ -103,9 +132,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         } else {
           setIsLoading(false);
         }
-      } else if (route !== '/') {
-        router.push('/');
-        setLoadingToFalseAfterNavigatingTo('/');
       } else {
         setIsLoading(false);
       }
@@ -122,16 +148,20 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
   const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
     try {
-      const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetchWithTimeout(
+        getApiUrl('/api/v1/ppt/openai/models/available'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: llmConfig.CUSTOM_LLM_URL,
+            api_key: llmConfig.CUSTOM_LLM_API_KEY,
+          }),
         },
-        body: JSON.stringify({
-          url: llmConfig.CUSTOM_LLM_URL,
-          api_key: llmConfig.CUSTOM_LLM_API_KEY,
-        }),
-      });
+        MODEL_CHECK_TIMEOUT_MS
+      );
       const data = await response.json();
       return data.includes(llmConfig.CUSTOM_MODEL);
     } catch (error) {
