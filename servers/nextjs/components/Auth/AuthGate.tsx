@@ -18,6 +18,8 @@ const initialStatus: AuthStatus = {
   username: null,
 };
 
+const AUTH_STATUS_TIMEOUT_MS = 10000;
+
 export default function AuthGate() {
   const [status, setStatus] = useState<AuthStatus>(initialStatus);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,12 +66,17 @@ export default function AuthGate() {
 
   const refreshStatus = async () => {
     setIsLoading(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      controller.abort();
+    }, AUTH_STATUS_TIMEOUT_MS);
 
     try {
       const response = await fetch(getApiUrl("/api/v1/auth/status"), {
         method: "GET",
         cache: "no-store",
         credentials: "include",
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -89,6 +96,7 @@ export default function AuthGate() {
         "We could not connect to the login service. Please refresh and try again."
       );
     } finally {
+      window.clearTimeout(timeout);
       setIsLoading(false);
     }
   };
@@ -183,6 +191,8 @@ export default function AuthGate() {
         "Signed in",
         "Welcome back. Loading your workspace."
       );
+      setIsRedirecting(true);
+      window.location.replace("/upload");
     } catch (submitError) {
       console.error(submitError);
       notify.error(
@@ -194,7 +204,7 @@ export default function AuthGate() {
     }
   };
 
-  if (isLoading || isRedirecting || status.authenticated) {
+  if (isLoading || isRedirecting) {
     return (
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white p-6">
         <div className="relative z-10 w-full max-w-md">
