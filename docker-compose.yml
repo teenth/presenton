@@ -13,7 +13,7 @@ services:
       dockerfile: Dockerfile
     labels: *presenton-traefik-labels
     ports:
-      - "${PRESENTON_HOST_PORT:-3001}:80"
+      - "3001:80"
     volumes:
       - ./app_data:/app_data
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
