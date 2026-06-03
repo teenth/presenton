@@ -41,6 +41,24 @@ def _safe_json_preview(value: Any, max_chars: int = 1200) -> str:
     return preview
 
 
+def _normalize_endpoint_url(base_url: Optional[str]) -> Optional[str]:
+    if not base_url:
+        return None
+
+    base = base_url.rstrip("/")
+    return f"{base}/chat/completions"
+
+
+def _infer_client_base_url(client: Any) -> Optional[str]:
+    base_url = getattr(client, "base_url", None)
+    if base_url is None:
+        base_url = getattr(client, "_base_url", None)
+    if base_url is None:
+        return None
+
+    return str(base_url)
+
+
 def _describe_response_format(response_format: Any) -> Optional[dict[str, Any]]:
     if response_format is None:
         return None
@@ -293,8 +311,9 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
     def worker():
         if llm_debug_logs_enabled():
             LOGGER.info(
-                "[llm-debug] client.generate start: client=%s kwargs=%s",
+                "[llm-debug] client.generate start: client=%s endpoint=%s kwargs=%s",
                 client.__class__.__name__,
+                _normalize_endpoint_url(_infer_client_base_url(client)),
                 _safe_json_preview(_describe_generate_kwargs(kwargs)),
             )
         event_count = 0
