@@ -12,9 +12,9 @@ import { getApiUrl } from '@/utils/api';
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
 
-  const route = usePathname();
+  const route = usePathname() ?? "";
   const [isLoading, setIsLoading] = useState(
-    () => !route?.startsWith("/pdf-maker")
+    () => !route.startsWith("/pdf-maker")
   );
   const router = useRouter();
 
