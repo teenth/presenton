@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Optional
 
@@ -19,6 +20,68 @@ from utils.schema_utils import get_schema_validation_errors
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def llm_debug_logs_enabled() -> bool:
+    return (os.getenv("LLM_DEBUG_LOGS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _safe_json_preview(value: Any, max_chars: int = 1200) -> str:
+    try:
+        preview = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        preview = repr(value)
+    if len(preview) > max_chars:
+        return preview[:max_chars] + "...(truncated)"
+    return preview
+
+
+def _describe_response_format(response_format: Any) -> Optional[dict[str, Any]]:
+    if response_format is None:
+        return None
+
+    description: dict[str, Any] = {
+        "class": response_format.__class__.__name__,
+    }
+    for attr in ("type", "name", "strict"):
+        value = getattr(response_format, attr, None)
+        if value is not None:
+            description[attr] = value
+
+    json_schema = getattr(response_format, "json_schema", None)
+    if isinstance(json_schema, dict):
+        description["json_schema_keys"] = sorted(json_schema.keys())
+        properties = json_schema.get("properties")
+        if isinstance(properties, dict):
+            description["json_schema_properties"] = sorted(properties.keys())
+
+    return description
+
+
+def _describe_generate_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    tools = kwargs.get("tools") or []
+    extra_body = kwargs.get("extra_body")
+
+    description: dict[str, Any] = {
+        "model": kwargs.get("model"),
+        "stream": kwargs.get("stream"),
+        "message_count": len(kwargs.get("messages") or []),
+        "tool_classes": [tool.__class__.__name__ for tool in tools],
+        "response_format": _describe_response_format(kwargs.get("response_format")),
+    }
+    if "max_tokens" in kwargs:
+        description["max_tokens"] = kwargs.get("max_tokens")
+    if isinstance(extra_body, dict):
+        description["extra_body_keys"] = sorted(extra_body.keys())
+    elif extra_body is not None:
+        description["extra_body_type"] = extra_body.__class__.__name__
+
+    return description
 
 
 def get_generate_kwargs(
@@ -228,12 +291,40 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
     sentinel = object()
 
     def worker():
+        if llm_debug_logs_enabled():
+            LOGGER.info(
+                "[llm-debug] client.generate start: client=%s kwargs=%s",
+                client.__class__.__name__,
+                _safe_json_preview(_describe_generate_kwargs(kwargs)),
+            )
+        event_count = 0
         try:
             for event in client.generate(**kwargs):
+                event_count += 1
+                if llm_debug_logs_enabled() and event_count <= 3:
+                    LOGGER.info(
+                        "[llm-debug] client.generate event[%s]: class=%s type=%s",
+                        event_count,
+                        event.__class__.__name__,
+                        getattr(event, "type", None),
+                    )
                 loop.call_soon_threadsafe(queue.put_nowait, event)
         except Exception as exc:
+            if llm_debug_logs_enabled():
+                LOGGER.exception(
+                    "[llm-debug] client.generate failed: class=%s message=%s "
+                    "events_seen=%s",
+                    exc.__class__.__name__,
+                    str(exc),
+                    event_count,
+                )
             loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:
+            if llm_debug_logs_enabled():
+                LOGGER.info(
+                    "[llm-debug] client.generate finished: events_seen=%s",
+                    event_count,
+                )
             loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
     worker_task = asyncio.create_task(asyncio.to_thread(worker))

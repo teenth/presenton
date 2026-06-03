@@ -1,5 +1,7 @@
+import logging
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from llmai import get_client
 from llmai.shared import (
@@ -15,13 +17,29 @@ from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enable_web_grounding, get_llm_config
-from utils.llm_provider import get_model
+from utils.get_env import get_custom_llm_url_env
+from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import (
     get_generate_kwargs,
+    llm_debug_logs_enabled,
     serialize_structured_content,
     stream_generate_events,
 )
 from utils.schema_utils import prepare_schema_for_validation
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _safe_url(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    try:
+        parsed = urlsplit(value)
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    except Exception:
+        return "<invalid-url>"
 
 
 def get_system_prompt(
@@ -182,6 +200,7 @@ async def generate_ppt_outline(
     include_table_of_contents: bool = False,
 ):
     model = get_model()
+    provider = get_llm_provider()
     response_model = (
         get_presentation_outline_model_with_n_slides(n_slides)
         if n_slides is not None
@@ -201,6 +220,19 @@ async def generate_ppt_outline(
             json_schema=outline_schema,
             strict=True,
         )
+        if llm_debug_logs_enabled():
+            LOGGER.info(
+                "[llm-debug] presentation outline request: provider=%s model=%s "
+                "custom_base_url=%s requested_slides=%s web_search=%s "
+                "schema_model=%s schema_keys=%s",
+                provider.value,
+                model,
+                _safe_url(get_custom_llm_url_env()),
+                n_slides,
+                use_search_tool,
+                response_model.__name__,
+                sorted(outline_schema.keys()),
+            )
         emitted_content = False
         async for event in stream_generate_events(
             client,
