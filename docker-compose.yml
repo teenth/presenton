@@ -11,12 +11,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      # You can replace 3000 with any other port number of your choice to run Presenton on a different port number.
-      - "3000:80"
-      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
-      - "1455:1455"
     labels: *presenton-traefik-labels
+    ports:
+      - "${PRESENTON_HOST_PORT:-3001}:80"
     volumes:
       - ./app_data:/app_data
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
@@ -123,11 +120,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    ports:
-      # You can replace 3000 with any other port number of your choice to run Presenton on a different port number.
-      - "3000:80"
-      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
-      - "1455:1455"
     labels: *presenton-traefik-labels
     volumes:
       - ./app_data:/app_data
@@ -225,10 +217,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    ports:
-      - "3000:80"
-      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
-      - "1455:1455"
     volumes:
       - .:/app
       - presenton_root_node_modules:/app/node_modules
@@ -338,10 +326,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    ports:
-      - "3000:80"
-      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
-      - "1455:1455"
     volumes:
       - .:/app
       - presenton_root_node_modules:/app/node_modules
