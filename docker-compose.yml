@@ -15,7 +15,7 @@ services:
     ports:
       - "3001:80"
     volumes:
-      - ./app_data:/app_data
+      - presenton_app_data:/app_data
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
       - ./servers/fastapi/utils/internal_http.py:/app/servers/fastapi/utils/internal_http.py:ro
     environment:
@@ -122,7 +122,7 @@ services:
               capabilities: [gpu]
     labels: *presenton-traefik-labels
     volumes:
-      - ./app_data:/app_data
+      - presenton_app_data:/app_data
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
@@ -221,7 +221,7 @@ services:
       - .:/app
       - presenton_root_node_modules:/app/node_modules
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
-      - ./app_data:/app_data
+      - presenton_app_data:/app_data
     environment:
       # Bundled PPTX/PDF export (Puppeteer); matches CI and production image.
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
@@ -330,7 +330,7 @@ services:
       - .:/app
       - presenton_root_node_modules:/app/node_modules
       - presenton_document_extraction_liteparse:/app/document-extraction-liteparse
-      - ./app_data:/app_data
+      - presenton_app_data:/app_data
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - START_OLLAMA=${START_OLLAMA:-false}
@@ -420,5 +420,6 @@ services:
       - RESET_AUTH=${RESET_AUTH:-}
 
 volumes:
+  presenton_app_data:
   presenton_root_node_modules:
   presenton_document_extraction_liteparse:
