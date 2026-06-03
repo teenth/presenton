@@ -46,6 +46,8 @@ def _normalize_endpoint_url(base_url: Optional[str]) -> Optional[str]:
         return None
 
     base = base_url.rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
     return f"{base}/chat/completions"
 
 
