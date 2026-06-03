@@ -309,13 +309,14 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[Any] = asyncio.Queue()
     sentinel = object()
+    endpoint = _normalize_endpoint_url(_infer_client_base_url(client))
 
     def worker():
         if llm_debug_logs_enabled():
             LOGGER.info(
                 "[llm-debug] client.generate start: client=%s endpoint=%s kwargs=%s",
                 client.__class__.__name__,
-                _normalize_endpoint_url(_infer_client_base_url(client)),
+                endpoint,
                 _safe_json_preview(_describe_generate_kwargs(kwargs)),
             )
         event_count = 0
@@ -334,9 +335,18 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
             if llm_debug_logs_enabled():
                 LOGGER.exception(
                     "[llm-debug] client.generate failed: class=%s message=%s "
-                    "events_seen=%s",
+                    "events_seen=%s endpoint=%s",
                     exc.__class__.__name__,
                     str(exc),
+                    event_count,
+                    endpoint,
+                )
+            else:
+                LOGGER.error(
+                    "[llm-error] client.generate failed: class=%s endpoint=%s "
+                    "events_seen=%s",
+                    exc.__class__.__name__,
+                    endpoint,
                     event_count,
                 )
             loop.call_soon_threadsafe(queue.put_nowait, exc)
