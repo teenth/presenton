@@ -58,6 +58,28 @@ def _json_preview(value: object, max_chars: int = 800) -> str:
     return preview
 
 
+def _json_loads_or_sse_data(raw_text: str) -> object:
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        data_chunks: list[str] = []
+        for line in raw_text.splitlines():
+            stripped_line = line.strip()
+            if not stripped_line.startswith("data:"):
+                continue
+            data_value = stripped_line[len("data:") :].strip()
+            if not data_value or data_value == "[DONE]":
+                continue
+            data_chunks.append(data_value)
+
+        for data_chunk in reversed(data_chunks):
+            try:
+                return json.loads(data_chunk)
+            except json.JSONDecodeError:
+                continue
+        raise
+
+
 class ImageGenerationService:
     def __init__(self, output_directory: str):
         self.output_directory = output_directory
@@ -1097,7 +1119,7 @@ class ImageGenerationService:
             )
 
         try:
-            return json.loads(raw_text)
+            return _json_loads_or_sse_data(raw_text)
         except json.JSONDecodeError as exc:
             LOGGER.error(
                 "[image-debug] %s endpoint returned non-json body: "

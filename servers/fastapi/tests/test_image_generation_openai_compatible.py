@@ -1,7 +1,10 @@
 import pytest
 import os
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from services.image_generation_service import ImageGenerationService
+from services.image_generation_service import (
+    ImageGenerationService,
+    _json_loads_or_sse_data,
+)
 
 
 class TestImageGenerationOpenAICompatible:
@@ -228,6 +231,20 @@ class TestImageGenerationOpenAICompatible:
             "task-grsai-1",
         )
         assert service._get_openai_compatible_image_status(payload) == "success"
+        assert service._extract_openai_compatible_image_items(payload) == [
+            {"url": "https://img.example.com/grsai.png"}
+        ]
+
+    def test_openai_compatible_grsai_data_prefixed_payload_helpers(
+        self, mock_images_directory
+    ):
+        service = ImageGenerationService(mock_images_directory)
+        payload = _json_loads_or_sse_data(
+            'data: {"id":"task-grsai-1","status":"succeeded",'
+            '"results":[{"url":"https://img.example.com/grsai.png"}]}'
+        )
+
+        assert service._get_openai_compatible_image_status(payload) == "succeeded"
         assert service._extract_openai_compatible_image_items(payload) == [
             {"url": "https://img.example.com/grsai.png"}
         ]
