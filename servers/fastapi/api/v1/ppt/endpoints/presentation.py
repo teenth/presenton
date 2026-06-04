@@ -375,18 +375,9 @@ async def stream_presentation(
 ):
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
-        logger.warning("[presentation-debug] update_presentation not found: id=%s", id)
+        logger.warning("[presentation-debug] stream_presentation not found: id=%s", id)
         raise HTTPException(status_code=404, detail="Presentation not found")
 
-    logger.info(
-        "[presentation-debug] update_presentation request: id=%s n_slides=%s "
-        "has_title=%s has_theme=%s slides=%s",
-        id,
-        n_slides,
-        title is not None,
-        theme is not None,
-        len(slides or []),
-    )
     if not presentation.structure:
         raise HTTPException(
             status_code=400,
@@ -549,6 +540,16 @@ async def update_presentation(
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+
+    logger.info(
+        "[presentation-debug] update_presentation request: id=%s n_slides=%s "
+        "has_title=%s has_theme=%s slides=%s",
+        id,
+        n_slides,
+        title is not None,
+        theme is not None,
+        len(slides or []),
+    )
 
     presentation_update_dict = {}
     if n_slides is not None:
