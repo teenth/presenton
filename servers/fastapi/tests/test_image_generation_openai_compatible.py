@@ -159,6 +159,79 @@ class TestImageGenerationOpenAICompatible:
                             "test prompt", mock_images_directory
                         )
 
+    def test_openai_compatible_grsai_endpoint_paths(self, mock_images_directory):
+        service = ImageGenerationService(mock_images_directory)
+
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://api.grsai.com/v1",
+                None,
+                endpoint_kind="generate",
+            )
+            == "https://api.grsai.com/v1/draw/completions"
+        )
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://api.grsai.com/v1",
+                None,
+                endpoint_kind="result",
+            )
+            == "https://api.grsai.com/v1/draw/result"
+        )
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://grsaiapi.com/v1",
+                "/api/generate",
+                endpoint_kind="generate",
+            )
+            == "https://grsaiapi.com/v1/draw/completions"
+        )
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://grsaiapi.com/v1",
+                "/api/result",
+                endpoint_kind="result",
+            )
+            == "https://grsaiapi.com/v1/draw/result"
+        )
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://grsaiapi.com/v1/api/generate",
+                None,
+                endpoint_kind="generate",
+            )
+            == "https://grsaiapi.com/v1/draw/completions"
+        )
+        assert (
+            service._build_openai_compatible_image_endpoint(
+                "https://grsaiapi.com/v1/draw/completions",
+                None,
+                endpoint_kind="result",
+            )
+            == "https://grsaiapi.com/v1/draw/result"
+        )
+
+    def test_openai_compatible_grsai_result_payload_helpers(
+        self, mock_images_directory
+    ):
+        service = ImageGenerationService(mock_images_directory)
+        payload = {
+            "data": {
+                "id": "task-grsai-1",
+                "status": "success",
+                "results": [{"url": "https://img.example.com/grsai.png"}],
+            }
+        }
+
+        assert service._extract_openai_compatible_task_ref(payload) == (
+            "id",
+            "task-grsai-1",
+        )
+        assert service._get_openai_compatible_image_status(payload) == "success"
+        assert service._extract_openai_compatible_image_items(payload) == [
+            {"url": "https://img.example.com/grsai.png"}
+        ]
+
     @pytest.mark.anyio
     async def test_generate_image_openai_compatible_url_response(
         self, mock_images_directory

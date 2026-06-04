@@ -324,8 +324,8 @@ These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the bac
 - **COMFYUI_URL** / **COMFYUI_WORKFLOW**: Self-hosted ComfyUI workflow JSON.
 - **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY**: Open WebUI–compatible image endpoint.
 - **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM Gateways, etc.).
-- **OPENAI_COMPAT_IMAGE_GENERATE_PATH**: Optional custom image generation path, e.g. `/api/generate`.
-- **OPENAI_COMPAT_IMAGE_RESULT_PATH**: Optional custom result polling path, e.g. `/api/result`.
+- **OPENAI_COMPAT_IMAGE_GENERATE_PATH**: Optional custom image generation path, e.g. `/draw/completions` for GrsAI GPT Image.
+- **OPENAI_COMPAT_IMAGE_RESULT_PATH**: Optional custom result polling path, e.g. `/draw/result` for GrsAI GPT Image.
 
 #### Telemetry
 
@@ -422,7 +422,7 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 - Using an OpenAI-Compatible Image Provider
 
   This routes all slide image requests through your OpenAI-compatible gateway (LiteLLM, Azure, vLLM, etc.) while keeping the text LLM configuration independent:
-    <pre><code class="language-bash">docker run -it --name presenton -p 3000:80 -e IMAGE_PROVIDER="openai_compatible" -e OPENAI_COMPAT_IMAGE_BASE_URL="https://proxy.example.com/v1" -e OPENAI_COMPAT_IMAGE_API_KEY="******" -e OPENAI_COMPAT_IMAGE_MODEL="gpt-image-1" -e OPENAI_COMPAT_IMAGE_GENERATE_PATH="/api/generate" -e OPENAI_COMPAT_IMAGE_RESULT_PATH="/api/result" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
+    <pre><code class="language-bash">docker run -it --name presenton -p 3000:80 -e IMAGE_PROVIDER="openai_compatible" -e OPENAI_COMPAT_IMAGE_BASE_URL="https://api.grsai.com/v1" -e OPENAI_COMPAT_IMAGE_API_KEY="******" -e OPENAI_COMPAT_IMAGE_MODEL="gpt-image-2" -e OPENAI_COMPAT_IMAGE_GENERATE_PATH="/draw/completions" -e OPENAI_COMPAT_IMAGE_RESULT_PATH="/draw/result" -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest</code></pre>
 
 #
 

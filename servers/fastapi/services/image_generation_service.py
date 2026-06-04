@@ -835,19 +835,55 @@ class ImageGenerationService:
                     else:
                         raise Exception(f"Failed to download image: {response.status}")
 
+    def _is_grsai_image_endpoint(self, url: str) -> bool:
+        return "grsai" in (urlparse(url).netloc or "").lower()
+
     def _build_openai_compatible_image_endpoint(
-        self, base_url: str, custom_path: str | None
+        self, base_url: str, custom_path: str | None, endpoint_kind: str = "generate"
     ) -> str:
         base_url = base_url.strip().rstrip("/")
+        is_grsai = self._is_grsai_image_endpoint(base_url)
 
         if custom_path:
             custom_path = custom_path.strip()
             if custom_path.startswith("http://") or custom_path.startswith("https://"):
+                if self._is_grsai_image_endpoint(custom_path):
+                    parsed_custom_path = (urlparse(custom_path).path or "").rstrip("/")
+                    if endpoint_kind == "result" and parsed_custom_path.endswith("/api/result"):
+                        return custom_path[: -len("/api/result")] + "/draw/result"
+                    if endpoint_kind == "generate" and parsed_custom_path.endswith("/api/generate"):
+                        return custom_path[: -len("/api/generate")] + "/draw/completions"
                 return custom_path
+            if is_grsai:
+                normalized_path = custom_path.rstrip("/")
+                if endpoint_kind == "result" and normalized_path.endswith("/api/result"):
+                    custom_path = "/draw/result"
+                if endpoint_kind == "generate" and normalized_path.endswith("/api/generate"):
+                    custom_path = "/draw/completions"
             return f"{base_url}/{custom_path.lstrip('/')}"
 
         parsed = urlparse(base_url)
         path = (parsed.path or "").rstrip("/")
+        if is_grsai:
+            if endpoint_kind == "result":
+                if path.endswith("/draw/result"):
+                    return base_url
+                if path.endswith("/api/result"):
+                    return base_url[: -len("/api/result")] + "/draw/result"
+                if path.endswith("/draw/completions"):
+                    return base_url[: -len("/draw/completions")] + "/draw/result"
+                if path.endswith("/api/generate"):
+                    return base_url[: -len("/api/generate")] + "/draw/result"
+                return f"{base_url}/draw/result"
+            if path.endswith("/draw/completions"):
+                return base_url
+            if path.endswith("/api/generate"):
+                return base_url[: -len("/api/generate")] + "/draw/completions"
+            if path.endswith("/draw/result"):
+                return base_url[: -len("/draw/result")] + "/draw/completions"
+            if path.endswith("/api/result"):
+                return base_url[: -len("/api/result")] + "/draw/completions"
+            return f"{base_url}/draw/completions"
         if path.endswith("/api/generate") or path.endswith("/generate"):
             return base_url
         return f"{base_url}/images/generations"
@@ -879,9 +915,47 @@ class ImageGenerationService:
         if not isinstance(payload, dict):
             return []
 
+        image_items = payload.get("results")
+        if isinstance(image_items, list):
+            return [
+                item if isinstance(item, dict) else {"url": item}
+                for item in image_items
+                if isinstance(item, (dict, str))
+            ]
+
         image_items = payload.get("data")
         if isinstance(image_items, list):
             return [item for item in image_items if isinstance(item, dict)]
+
+        if isinstance(image_items, dict):
+            nested_items = image_items.get("results")
+            if isinstance(nested_items, list):
+                return [
+                    item if isinstance(item, dict) else {"url": item}
+                    for item in nested_items
+                    if isinstance(item, (dict, str))
+                ]
+            nested_items = image_items.get("images")
+            if isinstance(nested_items, list):
+                return [item for item in nested_items if isinstance(item, dict)]
+            nested_items = image_items.get("output")
+            if isinstance(nested_items, list):
+                return [
+                    item if isinstance(item, dict) else {"url": item}
+                    for item in nested_items
+                    if isinstance(item, (dict, str))
+                ]
+            nested_items = image_items.get("data")
+            if isinstance(nested_items, list):
+                return [
+                    item if isinstance(item, dict) else {"url": item}
+                    for item in nested_items
+                    if isinstance(item, (dict, str))
+                ]
+            if isinstance(image_items.get("b64_json"), str):
+                return [image_items]
+            if isinstance(image_items.get("url"), str):
+                return [image_items]
 
         image_items = payload.get("images")
         if isinstance(image_items, list):
@@ -915,6 +989,9 @@ class ImageGenerationService:
             return None
 
         status = payload.get("status") or payload.get("state")
+        nested_data = payload.get("data")
+        if not status and isinstance(nested_data, dict):
+            status = nested_data.get("status") or nested_data.get("state")
         if not status:
             return None
         return str(status).lower().strip()
@@ -955,6 +1032,15 @@ class ImageGenerationService:
         if isinstance(nested_result, dict):
             for key in candidate_keys:
                 value = nested_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return key, value.strip()
+                if isinstance(value, (int, float)) and str(value):
+                    return key, str(value)
+
+        nested_data = payload.get("data")
+        if isinstance(nested_data, dict):
+            for key in candidate_keys:
+                value = nested_data.get(key)
                 if isinstance(value, str) and value.strip():
                     return key, value.strip()
                 if isinstance(value, (int, float)) and str(value):
@@ -1068,17 +1154,23 @@ class ImageGenerationService:
                 await asyncio.sleep(poll_interval_seconds)
 
             body = None
+            method_order = (
+                ("post", "get")
+                if (urlparse(result_endpoint).path or "").rstrip("/").endswith("/draw/result")
+                else ("get", "post")
+            )
             for payload in lookup_payloads:
-                body = await self._query_openai_compatible_image_result_once(
-                    session=session,
-                    result_endpoint=result_endpoint,
-                    api_key=api_key,
-                    payload=payload,
-                    method="get",
-                    log_failures=attempt in {0, max_attempts - 1},
-                )
-                if body is not None:
-                    break
+                if "get" in method_order and method_order[0] == "get":
+                    body = await self._query_openai_compatible_image_result_once(
+                        session=session,
+                        result_endpoint=result_endpoint,
+                        api_key=api_key,
+                        payload=payload,
+                        method="get",
+                        log_failures=attempt in {0, max_attempts - 1},
+                    )
+                    if body is not None:
+                        break
 
                 body = await self._query_openai_compatible_image_result_once(
                     session=session,
@@ -1090,6 +1182,18 @@ class ImageGenerationService:
                 )
                 if body is not None:
                     break
+
+                if "get" in method_order and method_order[0] != "get":
+                    body = await self._query_openai_compatible_image_result_once(
+                        session=session,
+                        result_endpoint=result_endpoint,
+                        api_key=api_key,
+                        payload=payload,
+                        method="get",
+                        log_failures=attempt in {0, max_attempts - 1},
+                    )
+                    if body is not None:
+                        break
 
             if body is None:
                 if attempt == max_attempts - 1:
@@ -1152,7 +1256,14 @@ class ImageGenerationService:
             if status in failed_status:
                 error_detail = ""
                 if isinstance(body, dict):
+                    nested_data = body.get("data")
                     err = body.get("error") or body.get("message") or body.get("detail")
+                    if not err and isinstance(nested_data, dict):
+                        err = (
+                            nested_data.get("error")
+                            or nested_data.get("message")
+                            or nested_data.get("detail")
+                        )
                     if err:
                         error_detail = f": {err}"
                 LOGGER.error(
@@ -1229,12 +1340,9 @@ class ImageGenerationService:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024",
-        }
+        payload = {"model": model, "prompt": prompt, "size": "1024x1024"}
+        if not (urlparse(endpoint).path or "").rstrip("/").endswith("/draw/completions"):
+            payload["n"] = 1
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             resp = await session.post(
@@ -1308,10 +1416,18 @@ class ImageGenerationService:
                 "OPENAI_COMPAT_IMAGE_BASE_URL, OPENAI_COMPAT_IMAGE_API_KEY and OPENAI_COMPAT_IMAGE_MODEL must be set."
             )
 
-        endpoint = self._build_openai_compatible_image_endpoint(base_url, generate_path)
+        endpoint = self._build_openai_compatible_image_endpoint(
+            base_url, generate_path, endpoint_kind="generate"
+        )
         result_endpoint = (
-            self._build_openai_compatible_image_endpoint(base_url, result_path)
+            self._build_openai_compatible_image_endpoint(
+                base_url, result_path, endpoint_kind="result"
+            )
             if result_path
+            else self._build_openai_compatible_image_endpoint(
+                base_url, None, endpoint_kind="result"
+            )
+            if self._is_grsai_image_endpoint(base_url)
             else None
         )
         base_path = (urlparse(base_url).path or "").rstrip("/")
@@ -1321,6 +1437,8 @@ class ImageGenerationService:
             or base_path.endswith("/api/generate")
             or base_path.endswith("/generate")
             or base_path.endswith("/images/generations")
+            or base_path.endswith("/draw/completions")
+            or self._is_grsai_image_endpoint(base_url)
         )
 
         if is_full_endpoint:
