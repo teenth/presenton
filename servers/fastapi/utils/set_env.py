@@ -193,6 +193,10 @@ def set_custom_llm_api_key_env(value):
     os.environ["CUSTOM_LLM_API_KEY"] = value
 
 
+def set_custom_llm_completion_path_env(value):
+    os.environ["CUSTOM_LLM_COMPLETION_PATH"] = value
+
+
 def set_ollama_model_env(value):
     os.environ["OLLAMA_MODEL"] = value
 

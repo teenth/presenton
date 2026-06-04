@@ -44,6 +44,7 @@ from utils.get_env import (
     get_codex_token_expires_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
+    get_custom_llm_completion_path_env,
     get_disable_thinking_env,
     get_fireworks_api_key_env,
     get_fireworks_base_url_env,
@@ -319,7 +320,10 @@ def get_llm_config() -> ClientConfig:
                 api_key="ollama",
             )
         case LLMProvider.CUSTOM:
-            base_url = get_custom_llm_url_env()
+            base_url = normalize_openai_compatible_base_url(
+                get_custom_llm_url_env() or "",
+                completion_path=get_custom_llm_completion_path_env(),
+            )
             if not base_url:
                 raise HTTPException(
                     status_code=400,

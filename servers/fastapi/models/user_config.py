@@ -79,6 +79,7 @@ class UserConfig(BaseModel):
     CUSTOM_LLM_URL: Optional[str] = None
     CUSTOM_LLM_API_KEY: Optional[str] = None
     CUSTOM_MODEL: Optional[str] = None
+    CUSTOM_LLM_COMPLETION_PATH: Optional[str] = None
 
     # Image Provider
     DISABLE_IMAGE_GENERATION: Optional[bool] = None

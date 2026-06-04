@@ -128,6 +128,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
       ""
     : "";
   const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || "";
+  const currentCustomCompletionPath =
+    (llmConfig.CUSTOM_LLM_COMPLETION_PATH || "").trim();
   const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || "").trim();
   const currentLmStudioUrl = (llmConfig.LMSTUDIO_BASE_URL || "").trim();
   const currentFireworksUrl = (llmConfig.FIREWORKS_BASE_URL || "").trim();
@@ -173,6 +175,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     selectedProvider,
     currentApiKey,
     currentCustomUrl,
+    currentCustomCompletionPath,
     currentLitellmUrl,
     currentLmStudioUrl,
     currentFireworksUrl,
@@ -287,6 +290,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             body: JSON.stringify({
               url: openAiCompatibleUrl,
               api_key: currentApiKey,
+              completion_path:
+                selectedProvider === "custom"
+                  ? currentCustomCompletionPath
+                  : undefined,
             }),
           }
         );
@@ -654,6 +661,25 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                     placeholder="OpenAI-compatible URL"
                   />
+                )}
+                {selectedProvider === "custom" && (
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Completion Path (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentCustomCompletionPath}
+                      onChange={(e) =>
+                        onInputChange(
+                          e.target.value,
+                          "CUSTOM_LLM_COMPLETION_PATH"
+                        )
+                      }
+                      className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      placeholder="e.g. /v1/responses"
+                    />
+                  </div>
                 )}
                 {selectedProvider === "litellm" && (
                   <>

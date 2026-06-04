@@ -5,6 +5,7 @@ from utils.get_env import (
     get_comfyui_url_env,
     get_comfyui_workflow_env,
     get_custom_llm_api_key_env,
+    get_custom_llm_completion_path_env,
     get_custom_llm_url_env,
     get_custom_model_env,
     get_dall_e_3_quality_env,
@@ -83,6 +84,7 @@ from utils.set_env import (
     set_anthropic_model_env,
     set_comfyui_url_env,
     set_comfyui_workflow_env,
+    set_custom_llm_completion_path_env,
     set_custom_llm_api_key_env,
     set_custom_llm_url_env,
     set_custom_model_env,
@@ -229,6 +231,10 @@ def get_user_config():
         CUSTOM_LLM_API_KEY=existing_config.CUSTOM_LLM_API_KEY
         or get_custom_llm_api_key_env(),
         CUSTOM_MODEL=existing_config.CUSTOM_MODEL or get_custom_model_env(),
+        CUSTOM_LLM_COMPLETION_PATH=(
+            existing_config.CUSTOM_LLM_COMPLETION_PATH
+            or get_custom_llm_completion_path_env()
+        ),
         IMAGE_PROVIDER=existing_config.IMAGE_PROVIDER or get_image_provider_env(),
         DISABLE_IMAGE_GENERATION=(
             existing_config.DISABLE_IMAGE_GENERATION
@@ -382,6 +388,8 @@ def update_env_with_user_config():
         set_custom_llm_api_key_env(user_config.CUSTOM_LLM_API_KEY)
     if user_config.CUSTOM_MODEL:
         set_custom_model_env(user_config.CUSTOM_MODEL)
+    if user_config.CUSTOM_LLM_COMPLETION_PATH:
+        set_custom_llm_completion_path_env(user_config.CUSTOM_LLM_COMPLETION_PATH)
     if user_config.DISABLE_IMAGE_GENERATION is not None:
         set_disable_image_generation_env(str(user_config.DISABLE_IMAGE_GENERATION))
     if user_config.IMAGE_PROVIDER:

@@ -76,6 +76,7 @@ export const updateLLMConfig = (
     ollama_model: "OLLAMA_MODEL",
     custom_llm_url: "CUSTOM_LLM_URL",
     custom_llm_api_key: "CUSTOM_LLM_API_KEY",
+    custom_llm_completion_path: "CUSTOM_LLM_COMPLETION_PATH",
     custom_model: "CUSTOM_MODEL",
     pexels_api_key: "PEXELS_API_KEY",
     pixabay_api_key: "PIXABAY_API_KEY",

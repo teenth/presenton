@@ -155,9 +155,10 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
+            body: JSON.stringify({
             url: llmConfig.CUSTOM_LLM_URL,
             api_key: llmConfig.CUSTOM_LLM_API_KEY,
+            completion_path: llmConfig.CUSTOM_LLM_COMPLETION_PATH || undefined,
           }),
         },
         MODEL_CHECK_TIMEOUT_MS

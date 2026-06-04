@@ -49,6 +49,7 @@ from utils.get_env import get_ollama_model_env
 from utils.get_env import get_custom_llm_api_key_env
 from utils.get_env import get_custom_llm_url_env
 from utils.get_env import get_custom_model_env
+from utils.get_env import get_custom_llm_completion_path_env
 from utils.llm_provider import (
     get_llm_provider,
     is_custom_llm_selected,
@@ -233,7 +234,9 @@ async def check_llm_and_image_provider_api_or_model_availability():
             if not custom_llm_url:
                 raise Exception("CUSTOM_LLM_URL must be provided")
             available_models = await list_available_openai_compatible_models(
-                custom_llm_url, get_custom_llm_api_key_env() or "null"
+                custom_llm_url,
+                get_custom_llm_api_key_env() or "null",
+                completion_path=get_custom_llm_completion_path_env(),
             )
             print("-" * 50)
             print("Available models: ", available_models)

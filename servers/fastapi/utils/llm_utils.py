@@ -396,19 +396,21 @@ async def stream_generate_events(client: Any, **kwargs) -> AsyncGenerator[Any, N
             if llm_debug_logs_enabled():
                 LOGGER.exception(
                     "[llm-debug] client.generate failed: class=%s message=%s "
-                    "events_seen=%s endpoint=%s",
+                    "events_seen=%s endpoint=%s request=%s",
                     exc.__class__.__name__,
                     str(exc),
                     event_count,
                     endpoint,
+                    _safe_json_preview(_describe_generate_kwargs(kwargs)),
                 )
             else:
                 LOGGER.error(
                     "[llm-error] client.generate failed: class=%s endpoint=%s "
-                    "events_seen=%s",
+                    "events_seen=%s request=%s",
                     exc.__class__.__name__,
                     endpoint,
                     event_count,
+                    _safe_json_preview(_describe_generate_kwargs(kwargs)),
                 )
             loop.call_soon_threadsafe(queue.put_nowait, exc)
         finally:

@@ -66,6 +66,10 @@ def get_custom_llm_url_env():
     return os.getenv("CUSTOM_LLM_URL")
 
 
+def get_custom_llm_completion_path_env():
+    return os.getenv("CUSTOM_LLM_COMPLETION_PATH")
+
+
 def get_openai_api_key_env():
     return os.getenv("OPENAI_API_KEY")
 

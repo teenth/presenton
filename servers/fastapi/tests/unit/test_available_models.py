@@ -40,3 +40,18 @@ def test_normalize_openai_compatible_base_url_appends_v1():
         normalize_openai_compatible_base_url("https://api.together.ai")
         == "https://api.together.ai/v1"
     )
+
+
+def test_normalize_openai_compatible_base_url_strips_completion_path_suffixes():
+    assert (
+        normalize_openai_compatible_base_url(
+            "https://api.with7.cn/chatgpt/v1/responses", "/v1/responses"
+        )
+        == "https://api.with7.cn/chatgpt/v1"
+    )
+    assert (
+        normalize_openai_compatible_base_url(
+            "https://api.with7.cn/chatgpt/v1/chat/completions", "chat/completions"
+        )
+        == "https://api.with7.cn/chatgpt/v1"
+    )

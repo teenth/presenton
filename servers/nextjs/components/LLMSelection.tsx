@@ -309,6 +309,7 @@ export default function LLMProviderSelection({
             <CustomConfig
               customLlmUrl={llmConfig.CUSTOM_LLM_URL || ""}
               customLlmApiKey={llmConfig.CUSTOM_LLM_API_KEY || ""}
+              customLlmCompletionPath={llmConfig.CUSTOM_LLM_COMPLETION_PATH}
               customModel={llmConfig.CUSTOM_MODEL || ""}
               disableThinking={llmConfig.DISABLE_THINKING || false}
               onInputChange={input_field_changed}

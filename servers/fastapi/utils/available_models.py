@@ -3,15 +3,71 @@ from openai import AsyncOpenAI
 from google import genai
 
 
-def normalize_openai_compatible_base_url(url: str) -> str:
+def _normalized_completion_path_variants(completion_path: str) -> list[str]:
+    raw_path = (completion_path or "").strip()
+    if not raw_path:
+        return []
+
+    path = raw_path.split("?", 1)[0].split("#", 1)[0].strip().lower()
+    if not path:
+        return []
+
+    if not path.startswith("/"):
+        path = f"/{path}"
+
+    variants = {path.rstrip("/")}
+    if path.startswith("/v1/"):
+        variants.add(f"/{path[3:].rstrip('/')}")
+    if path == "/v1":
+        variants.add("")
+    return [variant for variant in variants if variant]
+
+
+def _strip_known_completion_suffix(
+    url: str,
+    completion_path: str | None,
+) -> str:
+    no_query = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    if not no_query:
+        return no_query
+
+    candidate_paths = [
+        *_normalized_completion_path_variants(completion_path),
+        "/chat/completions",
+        "/responses",
+        "/completions",
+        "/v1/chat/completions",
+        "/v1/responses",
+        "/v1/completions",
+    ]
+    seen = set()
+    ordered_unique = []
+    for candidate in candidate_paths:
+        if not candidate or candidate in seen:
+            continue
+        ordered_unique.append(candidate)
+        seen.add(candidate)
+
+    lower = no_query.lower()
+    for candidate in ordered_unique:
+        if lower.endswith(candidate):
+            trimmed = no_query[: -len(candidate)]
+            return trimmed or no_query
+
+    return no_query
+
+
+def normalize_openai_compatible_base_url(
+    url: str,
+    completion_path: str | None = None,
+) -> str:
     """Ensure base URL targets the OpenAI-compatible /v1 root (LiteLLM, vLLM, etc.)."""
-    u = (url or "").strip().rstrip("/")
+    u = _strip_known_completion_suffix((url or "").strip(), completion_path)
     if not u:
         return u
     if u.endswith("/v1"):
         return u
-    base = u.split("?", 1)[0]
-    if "/v1" in base:
+    if "/v1" in u:
         return u
     return f"{u}/v1"
 
@@ -61,8 +117,12 @@ async def list_together_models(url: str, api_key: str) -> list[str]:
     return _model_ids_from_openai_compatible_payload(data)
 
 
-async def list_available_openai_compatible_models(url: str, api_key: str) -> list[str]:
-    url = normalize_openai_compatible_base_url(url)
+async def list_available_openai_compatible_models(
+    url: str,
+    api_key: str,
+    completion_path: str | None = None,
+) -> list[str]:
+    url = normalize_openai_compatible_base_url(url, completion_path=completion_path)
     if is_together_api_base_url(url):
         return await list_together_models(url, api_key)
 

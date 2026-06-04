@@ -19,6 +19,7 @@ import { Switch } from "./ui/switch";
 interface CustomConfigProps {
   customLlmUrl: string;
   customLlmApiKey: string;
+  customLlmCompletionPath?: string;
   customModel: string;
   disableThinking: boolean;
   onInputChange: (value: string | boolean, field: string) => void;
@@ -27,6 +28,7 @@ interface CustomConfigProps {
 export default function CustomConfig({
   customLlmUrl,
   customLlmApiKey,
+  customLlmCompletionPath,
   customModel,
   disableThinking,
   onInputChange,
@@ -37,12 +39,19 @@ export default function CustomConfig({
   const [openModelSelect, setOpenModelSelect] = useState(false);
   const [url, setUrl] = useState(customLlmUrl);
   const [apiKey, setApiKey] = useState(customLlmApiKey);
+  const [completionPath, setCompletionPath] = useState(customLlmCompletionPath || "");
 
   useEffect(() => {
     setCustomModels([]);
     setCustomModelsChecked(false);
     onInputChange("", "custom_model");
-  }, [url, apiKey]);
+  }, [url, apiKey, completionPath]);
+
+  useEffect(() => {
+    setUrl(customLlmUrl);
+    setApiKey(customLlmApiKey);
+    setCompletionPath(customLlmCompletionPath || "");
+  }, [customLlmUrl, customLlmApiKey, customLlmCompletionPath]);
 
   const onUrlChange = (value: string) => {
     setUrl(value);
@@ -52,6 +61,11 @@ export default function CustomConfig({
   const onApiKeyChange = (value: string) => {
     setApiKey(value);
     onInputChange(value, "custom_llm_api_key");
+  };
+
+  const onCompletionPathChange = (value: string) => {
+    setCompletionPath(value);
+    onInputChange(value, "custom_llm_completion_path");
   };
 
   const fetchCustomModels = async () => {
@@ -67,6 +81,7 @@ export default function CustomConfig({
         body: JSON.stringify({
           url: customLlmUrl,
           api_key: customLlmApiKey,
+          completion_path: completionPath || undefined,
         }),
       });
 
@@ -122,6 +137,22 @@ export default function CustomConfig({
             className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             value={customLlmApiKey}
             onChange={(e) => onApiKeyChange(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Completion Path (optional)
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            required
+            placeholder="e.g. /v1/responses"
+            className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            value={completionPath}
+            onChange={(e) => onCompletionPathChange(e.target.value)}
           />
         </div>
       </div>

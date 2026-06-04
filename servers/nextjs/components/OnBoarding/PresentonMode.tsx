@@ -147,6 +147,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     const currentTogetherUrl = (llmConfig.TOGETHER_BASE_URL || '').trim();
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
+    const currentCustomCompletionPath = (llmConfig.CUSTOM_LLM_COMPLETION_PATH || '').trim();
     const providerApiKeyLabel =
         llmConfig.LLM === 'custom'
             ? 'Custom LLM API Key'
@@ -250,7 +251,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 });
             } else if (llmConfig.LLM === 'ollama') {
                 response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/supported'));
-            } else {
+        } else {
                 const openAiCompatibleUrl =
                     llmConfig.LLM === 'custom'
                         ? llmConfig.CUSTOM_LLM_URL
@@ -270,7 +271,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     },
                     body: JSON.stringify({
                         url: openAiCompatibleUrl,
-                        api_key: currentApiKey
+                        api_key: currentApiKey,
+                        completion_path: llmConfig.LLM === 'custom'
+                            ? currentCustomCompletionPath
+                            : undefined,
                     }),
                 });
             }
@@ -773,6 +777,23 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                     placeholder="OpenAI-compatible URL"
                                 />
+                            )}
+                            {llmConfig.LLM === 'custom' && (
+                              <div className='mt-2'>
+                                <label className='block text-sm font-medium text-gray-700 mb-2'>
+                                  Completion Path (optional)
+                                </label>
+                                <input
+                                  type='text'
+                                  value={currentCustomCompletionPath}
+                                  onChange={(e) => setLlmConfig(prev => ({
+                                    ...prev,
+                                    CUSTOM_LLM_COMPLETION_PATH: e.target.value
+                                  }))}
+                                  className='w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors'
+                                  placeholder='e.g. /v1/responses'
+                                />
+                              </div>
                             )}
                             {llmConfig.LLM === 'litellm' && (
                                 <>
