@@ -1340,8 +1340,19 @@ class ImageGenerationService:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
+        endpoint_path = (urlparse(endpoint).path or "").rstrip("/")
+        is_grsai_draw_endpoint = (
+            self._is_grsai_image_endpoint(endpoint)
+            and endpoint_path.endswith("/draw/completions")
+        )
+        if is_grsai_draw_endpoint:
+            headers["Accept"] = "application/json"
+
         payload = {"model": model, "prompt": prompt, "size": "1024x1024"}
-        if not (urlparse(endpoint).path or "").rstrip("/").endswith("/draw/completions"):
+        if is_grsai_draw_endpoint:
+            payload["variants"] = 1
+            payload["shutProgress"] = True
+        else:
             payload["n"] = 1
 
         async with aiohttp.ClientSession(trust_env=True) as session:
