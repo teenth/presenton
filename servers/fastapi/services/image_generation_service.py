@@ -1072,6 +1072,48 @@ class ImageGenerationService:
             payloads.append({candidate_key: value})
         return payloads
 
+    async def _read_openai_compatible_json_response(
+        self,
+        resp: aiohttp.ClientResponse,
+        endpoint: str,
+        purpose: str,
+    ) -> object:
+        content_type = resp.headers.get("Content-Type", "")
+        raw_text = await resp.text()
+        body_preview = raw_text[:1200]
+
+        if not raw_text.strip():
+            LOGGER.error(
+                "[image-debug] %s endpoint returned empty body: "
+                "status=%s content_type=%s endpoint=%s",
+                purpose,
+                resp.status,
+                content_type,
+                endpoint,
+            )
+            raise Exception(
+                f"OpenAI-compatible image {purpose} endpoint returned empty body "
+                f"(status={resp.status}, content_type={content_type})."
+            )
+
+        try:
+            return json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            LOGGER.error(
+                "[image-debug] %s endpoint returned non-json body: "
+                "status=%s content_type=%s endpoint=%s body=%s",
+                purpose,
+                resp.status,
+                content_type,
+                endpoint,
+                body_preview,
+            )
+            raise Exception(
+                f"OpenAI-compatible image {purpose} endpoint returned non-JSON body "
+                f"(status={resp.status}, content_type={content_type}): "
+                f"{body_preview}"
+            ) from exc
+
     async def _query_openai_compatible_image_result_once(
         self,
         session: aiohttp.ClientSession,
@@ -1102,7 +1144,9 @@ class ImageGenerationService:
                             (await resp.text())[:800],
                         )
                     return None
-                return await resp.json()
+                return await self._read_openai_compatible_json_response(
+                    resp, result_endpoint, "result"
+                )
 
         if method == "post":
             async with session.post(
@@ -1122,7 +1166,9 @@ class ImageGenerationService:
                             (await resp.text())[:800],
                         )
                     return None
-                return await resp.json()
+                return await self._read_openai_compatible_json_response(
+                    resp, result_endpoint, "result"
+                )
 
         return None
 
@@ -1368,7 +1414,9 @@ class ImageGenerationService:
                     f"OpenAI-compatible image generation returned {resp.status}: {error_text}"
                 )
 
-            body = await resp.json()
+            body = await self._read_openai_compatible_json_response(
+                resp, endpoint, "generation"
+            )
             LOGGER.info(
                 "[image-debug] generation endpoint response: endpoint=%s "
                 "result_endpoint=%s body=%s",
