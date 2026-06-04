@@ -55,3 +55,12 @@ def test_normalize_openai_compatible_base_url_strips_completion_path_suffixes():
         )
         == "https://api.with7.cn/chatgpt/v1"
     )
+
+
+def test_normalize_openai_compatible_base_url_uses_nested_completion_path():
+    assert (
+        normalize_openai_compatible_base_url(
+            "https://api.with7.cn", "/chatgpt/v1/responses"
+        )
+        == "https://api.with7.cn/chatgpt/v1"
+    )

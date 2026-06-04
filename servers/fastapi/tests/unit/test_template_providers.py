@@ -114,12 +114,10 @@ def test_generate_slide_layout_code_uses_llmai_for_all_supported_providers(
     monkeypatch, provider: LLMProvider
 ):
     dummy_client = _DummyClient(outputs=["component-output"])
-    llm_config = {"provider": provider.value}
 
     monkeypatch.setattr(providers_module, "get_llm_provider", lambda: provider)
     monkeypatch.setattr(providers_module, "get_model", lambda: f"{provider.value}-model")
-    monkeypatch.setattr(providers_module, "get_llm_config", lambda: llm_config)
-    monkeypatch.setattr(providers_module, "get_client", lambda config: dummy_client)
+    monkeypatch.setattr(providers_module, "get_text_llm_client", lambda: dummy_client)
 
     result = asyncio.run(
         providers_module.generate_slide_layout_code(
@@ -174,8 +172,7 @@ def test_edit_slide_layout_code_uses_llmai_text_only(
 
     monkeypatch.setattr(providers_module, "get_llm_provider", lambda: provider)
     monkeypatch.setattr(providers_module, "get_model", lambda: "text-model")
-    monkeypatch.setattr(providers_module, "get_llm_config", lambda: {"provider": provider.value})
-    monkeypatch.setattr(providers_module, "get_client", lambda config: dummy_client)
+    monkeypatch.setattr(providers_module, "get_text_llm_client", lambda: dummy_client)
 
     result = asyncio.run(
         providers_module.edit_slide_layout_code(
@@ -193,8 +190,7 @@ def test_edit_slide_layout_code_uses_llmai_text_only(
 
 def test_call_template_provider_with_llmai_raises_when_output_is_empty(monkeypatch):
     dummy_client = _DummyClient(outputs=[None])
-    monkeypatch.setattr(providers_module, "get_llm_config", lambda: {"provider": "openai"})
-    monkeypatch.setattr(providers_module, "get_client", lambda config: dummy_client)
+    monkeypatch.setattr(providers_module, "get_text_llm_client", lambda: dummy_client)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
@@ -357,8 +353,7 @@ def test_generate_slide_layout_code_fail_fast_on_vision_error(monkeypatch):
     )
     monkeypatch.setattr(providers_module, "get_llm_provider", lambda: LLMProvider.OPENAI)
     monkeypatch.setattr(providers_module, "get_model", lambda: "text-only")
-    monkeypatch.setattr(providers_module, "get_llm_config", lambda: {"provider": "openai"})
-    monkeypatch.setattr(providers_module, "get_client", lambda config: dummy_client)
+    monkeypatch.setattr(providers_module, "get_text_llm_client", lambda: dummy_client)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(

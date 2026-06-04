@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from llmai import get_client
 from llmai.shared import (
     JSONSchemaResponse,
     Message,
@@ -16,7 +15,7 @@ from llmai.shared import (
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_config import enable_web_grounding, get_llm_config
+from utils.llm_config import enable_web_grounding
 from utils.get_env import get_custom_llm_url_env
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import (
@@ -26,6 +25,7 @@ from utils.llm_utils import (
     stream_generate_events,
 )
 from utils.schema_utils import prepare_schema_for_validation
+from utils.text_llm_client import get_text_llm_client
 
 
 LOGGER = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ async def generate_ppt_outline(
         else PresentationOutlineModel
     )
 
-    client = get_client(config=get_llm_config())
+    client = get_text_llm_client()
     use_search_tool = web_search
 
     try:

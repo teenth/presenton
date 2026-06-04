@@ -16,10 +16,12 @@ from llmai.shared import (
 )
 
 from enums.llm_provider import LLMProvider
+from utils.custom_completion_path_client import build_custom_completion_endpoint
 from utils.llm_config import get_extra_body
 from utils.get_env import (
     get_azure_openai_base_url_env,
     get_cerebras_base_url_env,
+    get_custom_llm_completion_path_env,
     get_custom_llm_url_env,
     get_fireworks_base_url_env,
     get_litellm_base_url_env,
@@ -60,7 +62,7 @@ def _normalize_endpoint_url(base_url: Optional[str]) -> Optional[str]:
         return None
 
     base = base_url.rstrip("/")
-    if base.endswith("/chat/completions"):
+    if base.endswith("/chat/completions") or base.endswith("/responses"):
         return base
     return f"{base}/chat/completions"
 
@@ -93,6 +95,12 @@ def _infer_base_url_from_provider() -> Optional[str]:
         return None
 
     if provider == LLMProvider.CUSTOM:
+        endpoint = build_custom_completion_endpoint(
+            get_custom_llm_url_env(),
+            get_custom_llm_completion_path_env(),
+        )
+        if endpoint:
+            return endpoint
         return get_custom_llm_url_env()
     if provider == LLMProvider.OPENROUTER:
         return get_openrouter_base_url_env()

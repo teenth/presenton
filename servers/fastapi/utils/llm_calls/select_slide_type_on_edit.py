@@ -1,13 +1,12 @@
-from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from models.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from models.slide_layout_index import SlideLayoutIndex
 from models.sql.slide import SlideModel
-from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.llm_provider import get_model
 from utils.schema_utils import prepare_schema_for_validation
+from utils.text_llm_client import get_text_llm_client
 
 
 def get_messages(
@@ -53,7 +52,7 @@ async def get_slide_layout_from_prompt(
     slide: SlideModel,
     memory_context: str = "",
 ) -> SlideLayoutModel:
-    client = get_client(config=get_llm_config())
+    client = get_text_llm_client()
     model = get_model()
 
     slide_layout_index = layout.get_slide_layout_index(slide.layout)

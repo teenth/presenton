@@ -57,6 +57,23 @@ def _strip_known_completion_suffix(
     return no_query
 
 
+def _base_path_from_completion_path(completion_path: str | None) -> str:
+    raw_path = (completion_path or "").strip()
+    if not raw_path:
+        return ""
+    path = raw_path.split("?", 1)[0].split("#", 1)[0].strip()
+    if not path:
+        return ""
+    if not path.startswith("/"):
+        path = f"/{path}"
+
+    lowered = path.lower().rstrip("/")
+    for suffix in ("/chat/completions", "/responses", "/completions"):
+        if lowered.endswith(suffix):
+            return path[: -len(suffix)].rstrip("/")
+    return ""
+
+
 def normalize_openai_compatible_base_url(
     url: str,
     completion_path: str | None = None,
@@ -65,6 +82,13 @@ def normalize_openai_compatible_base_url(
     u = _strip_known_completion_suffix((url or "").strip(), completion_path)
     if not u:
         return u
+    completion_base_path = _base_path_from_completion_path(completion_path)
+    if (
+        completion_base_path
+        and not u.lower().endswith(completion_base_path.lower())
+        and "/v1" not in u.lower()
+    ):
+        u = f"{u.rstrip('/')}/{completion_base_path.lstrip('/')}"
     if u.endswith("/v1"):
         return u
     if "/v1" in u:

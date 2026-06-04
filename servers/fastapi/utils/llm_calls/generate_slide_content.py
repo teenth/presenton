@@ -2,13 +2,11 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.schema_utils import (
@@ -16,6 +14,7 @@ from utils.schema_utils import (
     ensure_array_schemas_have_items,
     remove_fields_from_schema,
 )
+from utils.text_llm_client import get_text_llm_client
 
 SLIDE_CONTENT_SYSTEM_PROMPT = """
 You will be given slide content and response schema.
@@ -166,7 +165,7 @@ async def get_slide_content_from_type_and_outline(
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
 ):
-    client = get_client(config=get_llm_config())
+    client = get_text_llm_client()
     model = get_model()
 
     response_schema = remove_fields_from_schema(

@@ -2,13 +2,12 @@ import asyncio
 from typing import Awaitable, Callable, Optional
 
 from fastapi import HTTPException
-from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextResponse, UserMessage
 
 from enums.llm_provider import LLMProvider
-from utils.llm_config import get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import extract_text
+from utils.text_llm_client import get_text_llm_client
 from utils.template_vision_errors import (
     VISION_LAYOUT_USER_MESSAGE,
     is_likely_vision_capability_error,
@@ -90,7 +89,7 @@ async def _call_template_provider_with_llmai(
     image_bytes: Optional[bytes] = None,
     media_type: str = "image/png",
 ) -> str:
-    client = get_client(config=get_llm_config())
+    client = get_text_llm_client()
     response = await asyncio.to_thread(
         client.generate,
         model=model,
