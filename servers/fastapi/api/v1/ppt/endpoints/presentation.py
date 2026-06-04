@@ -202,6 +202,7 @@ async def get_presentation(
 ):
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
+        logger.warning("[presentation-debug] get_presentation not found: id=%s", id)
         raise HTTPException(404, "Presentation not found")
     slides_result = await sql_session.scalars(
         select(SlideModel)
@@ -210,6 +211,12 @@ async def get_presentation(
     )
     slides = list(slides_result)
     fonts = await _resolve_presentation_fonts(presentation, slides, sql_session)
+    logger.info(
+        "[presentation-debug] get_presentation loaded: id=%s slides=%s fonts=%s",
+        id,
+        len(slides),
+        len(fonts or []),
+    )
     return PresentationWithSlides(
         **presentation.model_dump(),
         slides=slides,
@@ -368,7 +375,18 @@ async def stream_presentation(
 ):
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
+        logger.warning("[presentation-debug] update_presentation not found: id=%s", id)
         raise HTTPException(status_code=404, detail="Presentation not found")
+
+    logger.info(
+        "[presentation-debug] update_presentation request: id=%s n_slides=%s "
+        "has_title=%s has_theme=%s slides=%s",
+        id,
+        n_slides,
+        title is not None,
+        theme is not None,
+        len(slides or []),
+    )
     if not presentation.structure:
         raise HTTPException(
             status_code=400,

@@ -1,10 +1,13 @@
 import os
+import logging
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from api.lifespan import app_lifespan
 from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
@@ -19,6 +22,9 @@ from utils.get_env import (
     get_sentry_traces_sample_rate_env,
 )
 from utils.path_helpers import get_resource_path
+
+
+logger = logging.getLogger(__name__)
 
 
 def _maybe_init_sentry() -> None:
@@ -84,6 +90,31 @@ app.add_middleware(
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
 app.add_middleware(SessionAuthMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    body_preview = "<unavailable>"
+    try:
+        body = await request.body()
+        body_preview = body.decode("utf-8", errors="replace")[:1200]
+    except Exception:
+        pass
+
+    logger.warning(
+        "[request-validation] path=%s method=%s errors=%s body=%s",
+        request.url.path,
+        request.method,
+        exc.errors(),
+        body_preview,
+    )
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": exc.errors()}),
+    )
 
 
 @app.middleware("http")

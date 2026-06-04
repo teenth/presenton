@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import secrets
 from urllib.parse import urlparse
@@ -42,8 +43,19 @@ from utils.asset_directory_utils import absolute_fastapi_asset_url
 import uuid
 
 
+LOGGER = logging.getLogger(__name__)
 COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
 COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
+
+
+def _json_preview(value: object, max_chars: int = 800) -> str:
+    try:
+        preview = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        preview = repr(value)
+    if len(preview) > max_chars:
+        return preview[:max_chars] + "...(truncated)"
+    return preview
 
 
 class ImageGenerationService:
@@ -981,6 +993,7 @@ class ImageGenerationService:
         api_key: str,
         payload: dict[str, str],
         method: str,
+        log_failures: bool = False,
     ) -> object | None:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         timeout = aiohttp.ClientTimeout(total=120)
@@ -993,6 +1006,15 @@ class ImageGenerationService:
                 timeout=timeout,
             ) as resp:
                 if resp.status != 200:
+                    if log_failures:
+                        LOGGER.warning(
+                            "[image-debug] result lookup failed: method=get "
+                            "status=%s endpoint=%s payload=%s body=%s",
+                            resp.status,
+                            result_endpoint,
+                            _json_preview(payload),
+                            (await resp.text())[:800],
+                        )
                     return None
                 return await resp.json()
 
@@ -1004,6 +1026,15 @@ class ImageGenerationService:
                 timeout=timeout,
             ) as resp:
                 if resp.status != 200:
+                    if log_failures:
+                        LOGGER.warning(
+                            "[image-debug] result lookup failed: method=post "
+                            "status=%s endpoint=%s payload=%s body=%s",
+                            resp.status,
+                            result_endpoint,
+                            _json_preview(payload),
+                            (await resp.text())[:800],
+                        )
                     return None
                 return await resp.json()
 
@@ -1044,6 +1075,7 @@ class ImageGenerationService:
                     api_key=api_key,
                     payload=payload,
                     method="get",
+                    log_failures=attempt in {0, max_attempts - 1},
                 )
                 if body is not None:
                     break
@@ -1054,12 +1086,21 @@ class ImageGenerationService:
                     api_key=api_key,
                     payload=payload,
                     method="post",
+                    log_failures=attempt in {0, max_attempts - 1},
                 )
                 if body is not None:
                     break
 
             if body is None:
                 if attempt == max_attempts - 1:
+                    LOGGER.error(
+                        "[image-debug] result endpoint returned no response: "
+                        "endpoint=%s task_ref=%s lookup_payloads=%s attempts=%s",
+                        result_endpoint,
+                        task_ref,
+                        _json_preview(lookup_payloads),
+                        max_attempts,
+                    )
                     raise Exception(
                         "OpenAI-compatible image result endpoint returned no response."
                     )
@@ -1067,6 +1108,13 @@ class ImageGenerationService:
 
             image_items = self._extract_openai_compatible_image_items(body)
             if image_items:
+                LOGGER.info(
+                    "[image-debug] result endpoint returned image data: "
+                    "endpoint=%s task_ref=%s attempt=%s",
+                    result_endpoint,
+                    task_ref,
+                    attempt + 1,
+                )
                 return await self._write_openai_compatible_image_payload(
                     body=body,
                     output_directory=output_directory,
@@ -1077,12 +1125,26 @@ class ImageGenerationService:
             status = self._get_openai_compatible_image_status(body)
             if not status:
                 if attempt == max_attempts - 1:
+                    LOGGER.error(
+                        "[image-debug] unsupported result payload: endpoint=%s "
+                        "task_ref=%s payload=%s",
+                        result_endpoint,
+                        task_ref,
+                        _json_preview(body),
+                    )
                     raise Exception(
                         f"OpenAI-compatible image result endpoint returned unsupported payload: {json.dumps(body)}"
                     )
                 continue
 
             if status in completed_status:
+                LOGGER.error(
+                    "[image-debug] completed result has no image data: endpoint=%s "
+                    "task_ref=%s payload=%s",
+                    result_endpoint,
+                    task_ref,
+                    _json_preview(body),
+                )
                 raise Exception(
                     f"OpenAI-compatible image result endpoint returned status={status} without image data."
                 )
@@ -1093,6 +1155,14 @@ class ImageGenerationService:
                     err = body.get("error") or body.get("message") or body.get("detail")
                     if err:
                         error_detail = f": {err}"
+                LOGGER.error(
+                    "[image-debug] result endpoint reported failed task: "
+                    "endpoint=%s task_ref=%s status=%s payload=%s",
+                    result_endpoint,
+                    task_ref,
+                    status,
+                    _json_preview(body),
+                )
                 raise Exception(
                     f"OpenAI-compatible image generation failed with status={status}{error_detail}"
                 )
@@ -1180,6 +1250,13 @@ class ImageGenerationService:
                 )
 
             body = await resp.json()
+            LOGGER.info(
+                "[image-debug] generation endpoint response: endpoint=%s "
+                "result_endpoint=%s body=%s",
+                endpoint,
+                result_endpoint,
+                _json_preview(body),
+            )
 
         image_items = self._extract_openai_compatible_image_items(body)
         if image_items:
@@ -1192,6 +1269,13 @@ class ImageGenerationService:
 
         task_ref = self._extract_openai_compatible_task_ref(body)
         if task_ref and result_endpoint:
+            LOGGER.info(
+                "[image-debug] polling result endpoint: endpoint=%s "
+                "result_endpoint=%s task_ref=%s",
+                endpoint,
+                result_endpoint,
+                task_ref,
+            )
             async with aiohttp.ClientSession(trust_env=True) as session:
                 return await self._wait_for_openai_compatible_image_result(
                     session=session,
