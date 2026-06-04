@@ -428,6 +428,8 @@ const setupUserConfigFromEnv = () => {
     CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL || existingConfig.CUSTOM_LLM_URL,
     CUSTOM_LLM_API_KEY:
       process.env.CUSTOM_LLM_API_KEY || existingConfig.CUSTOM_LLM_API_KEY,
+    CUSTOM_LLM_COMPLETION_PATH:
+      process.env.CUSTOM_LLM_COMPLETION_PATH || existingConfig.CUSTOM_LLM_COMPLETION_PATH,
     CUSTOM_MODEL: process.env.CUSTOM_MODEL || existingConfig.CUSTOM_MODEL,
     LITELLM_BASE_URL: process.env.LITELLM_BASE_URL || existingConfig.LITELLM_BASE_URL,
     LITELLM_API_KEY: process.env.LITELLM_API_KEY || existingConfig.LITELLM_API_KEY,
